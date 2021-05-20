@@ -60,10 +60,10 @@ def create_frame_objects(body_parts):
         res = pyds.NvDsInferObjectDetectionInfo()
 
         rect_x1_f, rect_y1_f, rect_x2_f, rect_y2_f = bbox
-        res.left = rect_y1_f
-        res.top = rect_x1_f
-        res.width = rect_y2_f - rect_y1_f
-        res.height = rect_x2_f - rect_x1_f
+        res.left = rect_x1_f
+        res.top = rect_y1_f
+        res.width = rect_x2_f - rect_x1_f
+        res.height = rect_y2_f - rect_y1_f
         objects_list.append(res)
     return objects_list
 
@@ -75,14 +75,11 @@ def add_obj_meta_to_frame(frame_object, batch_meta, frame_meta):
     obj_meta = pyds.nvds_acquire_obj_meta_from_pool(batch_meta)
     # Set bbox properties. These are in input resolution.
     rect_params = obj_meta.rect_params
-    rect_params.left = int(MUXER_OUTPUT_WIDTH * frame_object.left)
-    rect_params.top = int(MUXER_OUTPUT_HEIGHT * frame_object.top)
-    rect_params.width = int(MUXER_OUTPUT_WIDTH * frame_object.width)
-    rect_params.height = int(MUXER_OUTPUT_HEIGHT * frame_object.height)
-
-    # Semi-transparent yellow backgroud
-    #rect_params.has_bg_color = 0
-    #rect_params.bg_color.set(1, 1, 0, 0.4)
+ 
+    rect_params.left = int(frame_object.left)
+    rect_params.top = int(frame_object.top)
+    rect_params.width = int(frame_object.width)
+    rect_params.height = int(frame_object.height)
 
     # Red border of width 3
     rect_params.border_width = 3

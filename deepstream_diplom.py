@@ -187,8 +187,8 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
                 break
 
             frame_object_list = create_frame_objects(body_list)
-            #for frame_object in frame_object_list:
-             #   add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
+            for frame_object in frame_object_list:
+                add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
 
         try:
             l_frame = l_frame.next
