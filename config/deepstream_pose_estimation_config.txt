@@ -42,7 +42,7 @@
 gpu-id=0
 net-scale-factor=0.0174292
 offsets=123.675;116.28;103.53
-onnx-file=models/pose_estimation.onnx
+onnx-file=../models/pose_estimation.onnx
 labelfile-path=labels.txt
 batch-size=1
 process-mode=1
@@ -52,7 +52,7 @@ network-mode=2
 num-detected-classes=4
 interval=0
 gie-unique-id=1
-model-engine-file=models/pose_estimation.onnx_b1_gpu0_fp16.engine
+model-engine-file=../models/pose_estimation.onnx_b1_gpu0_fp16.engine
 network-type=100
 workspace-size=500
 

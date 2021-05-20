@@ -12,7 +12,7 @@ import json
 
 class BodyPartsParser:
     def __init__(self):
-        with open('human_pose.json', 'r') as f:
+        with open('models/human_pose.json', 'r') as f:
             human_pose = json.load(f)
 
         self.__topology = coco_category_to_topology(human_pose)

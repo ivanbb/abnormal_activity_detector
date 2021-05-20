@@ -46,8 +46,8 @@ from torch.utils import dlpack
 import torch
 import numpy as np
 from operator import itemgetter
-import tensorflow as tf
-from activity_predictor import *
+#import tensorflow as tf
+#from activity_predictor import *
 from exceptions import CreatePipelineException
 from detected_objects_parser import BodyPartsParser, create_frame_objects, add_obj_meta_to_frame
 from constants import *
@@ -59,7 +59,7 @@ body_idx = dict([[v, k] for k, v in BODY_LABELS.items()])
 
 trackers = []
 
-secondary_model = tf.keras.models.load_model('models/lstm_spin_squat.h5')
+#secondary_model = tf.keras.models.load_model('models/lstm_spin_squat.h5')
 window = 3
 pose_vec_dim = 36
 motion_dict = {0: 'spin', 1: 'squat'}
@@ -176,8 +176,8 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
             tensor_meta = pyds.NvDsInferTensorMeta.cast(user_meta.user_meta_data)
 
             counts, objects, normalized_peaks = body_parts_parser.parse_objects_from_tensor_meta(tensor_meta)
-            body_list = create_display_meta(objects, counts, normalized_peaks, frame_meta, MUXER_OUTPUT_WIDTH,
-                                            MUXER_OUTPUT_HEIGHT)
+            body_list = create_display_meta(objects, counts, normalized_peaks, frame_meta, TILED_OUTPUT_WIDTH,
+                                            TILED_OUTPUT_HEIGHT)
 
             #predict_activity(secondary_model, body_list, frame_meta, MUXER_OUTPUT_WIDTH, MUXER_OUTPUT_HEIGHT)
 
@@ -187,8 +187,8 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
                 break
 
             frame_object_list = create_frame_objects(body_list)
-            for frame_object in frame_object_list:
-                add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
+            #for frame_object in frame_object_list:
+             #   add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
 
         try:
             l_frame = l_frame.next
@@ -273,6 +273,10 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
 
     return Gst.PadProbeReturn.OK
 
+def decodebin_child_added(child_proxy,Object,name,user_data):
+    print("Decodebin child added:", name, "\n")
+    if(name.find("decodebin") != -1):
+        Object.connect("child-added",decodebin_child_added,user_data)   
 
 def cb_newpad(decodebin, decoder_src_pad, data):
     caps = decoder_src_pad.get_current_caps()
@@ -329,6 +333,7 @@ def create_source_bin(index, uri):
     # Connect to the "pad-added" signal of the decodebin which generates a
     # callback once a new pad for raw data has beed created by the decodebin
     uri_decode_bin.connect("pad-added", cb_newpad, nbin)
+    uri_decode_bin.connect("child-added",decodebin_child_added,nbin)
 
     # We need to create a ghost pad for the source bin which will act as a proxy
     # for the video decoder src pad. The ghost pad will not have a target right
@@ -421,10 +426,10 @@ def create_pipeline(urls):
 
     # Create nvstreammux instance to form batches from one or more sources.
     streammux = create_pipeline_element("nvstreammux", "Stream-muxer")
-
+    pipeline.add(streammux)
     for i in range(number_sources):
         print("Creating source_bin {0} \n ".format(i))
-        uri_name = urls[i + 1]
+        uri_name = urls[i]
         if uri_name.find("rtsp://") == 0:
             is_live = True
         source_bin = create_source_bin(i, uri_name)
@@ -484,9 +489,11 @@ def create_pipeline(urls):
     tiler.set_property("width", TILED_OUTPUT_WIDTH)
     tiler.set_property("height", TILED_OUTPUT_HEIGHT)
     sink.set_property("qos", 0)
+    sink.set_property("sync", 0)
+    configure_tracker(tracker)
 
     print("Adding elements to Pipeline \n")
-    pipeline.add(streammux)
+
     pipeline.add(queue1)
     pipeline.add(queue2)
     pipeline.add(queue3)
@@ -525,6 +532,12 @@ def create_pipeline(urls):
         nvosd.link(queue6)
         queue6.link(sink)
 
+    # create an event loop and feed gstreamer bus messages to it
+    loop = GObject.MainLoop()
+    bus = pipeline.get_bus()
+    bus.add_signal_watch()
+    bus.connect("message", bus_call, loop)
+
     pgie_src_pad = pgie.get_static_pad("src")
     if not pgie_src_pad:
         raise CreatePipelineException("Unable to get src pad of pgie")
@@ -537,7 +550,7 @@ def create_pipeline(urls):
 
     osdsinkpad.add_probe(Gst.PadProbeType.BUFFER, osd_sink_pad_buffer_probe, 0)
 
-    return pipeline
+    return pipeline, loop
 
 
 def main(args):
@@ -555,7 +568,8 @@ def main(args):
         sys.exit(1)
 
     sources_urls = []
-    for i in range(0, len(args) - 1):
+    for i in range(0, len(args)):
+        print(args[i])
         fps_streams["stream{0}".format(i)] = GETFPS(i)
         if i != 0:
             sources_urls.append(args[i])
@@ -565,17 +579,11 @@ def main(args):
     Gst.init(None)
 
     try:
-        pipeline = create_pipeline(sources_urls)
+        pipeline, loop = create_pipeline(sources_urls)
     except CreatePipelineException as e:
         sys.stderr.write("Creating pipeline error:")
         sys.stderr.write(e.message)
         sys.exit(1)
-
-    # create an event loop and feed gstreamer bus messages to it
-    loop = GObject.MainLoop()
-    bus = pipeline.get_bus()
-    bus.add_signal_watch()
-    bus.connect("message", bus_call, loop)
 
     # List the sources
     print("Now playing...")
