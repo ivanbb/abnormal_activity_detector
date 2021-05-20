@@ -49,7 +49,7 @@ from operator import itemgetter
 import tensorflow as tf
 from activity_predictor import *
 from exceptions import CreatePipelineException
-from body_parts_parser import BodyPartsParser
+from detected_objects_parser import BodyPartsParser, create_frame_objects, add_obj_meta_to_frame
 from constants import *
 
 import pyds
@@ -179,15 +179,16 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
             body_list = create_display_meta(objects, counts, normalized_peaks, frame_meta, MUXER_OUTPUT_WIDTH,
                                             MUXER_OUTPUT_HEIGHT)
 
-            predict_activity(secondary_model, body_list, frame_meta, MUXER_OUTPUT_WIDTH, MUXER_OUTPUT_HEIGHT)
+            #predict_activity(secondary_model, body_list, frame_meta, MUXER_OUTPUT_WIDTH, MUXER_OUTPUT_HEIGHT)
 
             try:
                 l_user = l_user.next
             except StopIteration:
                 break
 
-            # for frame_object in frame_object_list:
-            # add_obj_meta_to_frame(frame_object, batch_meta, frame_meta, label_names)
+            frame_object_list = create_frame_objects(body_list)
+            for frame_object in frame_object_list:
+                add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
 
         try:
             l_frame = l_frame.next
@@ -342,6 +343,44 @@ def create_source_bin(index, uri):
     return nbin
 
 
+def configure_tracker(tracker):
+    """
+    Set properties of tracker
+    Args:
+        tracker
+
+    Returns:
+        none
+
+    """
+    config = configparser.ConfigParser()
+    config.read('config/tracker_config.txt')
+    config.sections()
+
+    for key in config['tracker']:
+        if key == 'tracker-width':
+            tracker_width = config.getint('tracker', key)
+            tracker.set_property('tracker-width', tracker_width)
+        if key == 'tracker-height':
+            tracker_height = config.getint('tracker', key)
+            tracker.set_property('tracker-height', tracker_height)
+        if key == 'gpu-id':
+            tracker_gpu_id = config.getint('tracker', key)
+            tracker.set_property('gpu_id', tracker_gpu_id)
+        if key == 'll-lib-file':
+            tracker_ll_lib_file = config.get('tracker', key)
+            tracker.set_property('ll-lib-file', tracker_ll_lib_file)
+        if key == 'll-config-file':
+            tracker_ll_config_file = config.get('tracker', key)
+            tracker.set_property('ll-config-file', tracker_ll_config_file)
+        if key == 'enable-batch-process':
+            tracker_enable_batch_process = config.getint('tracker', key)
+            tracker.set_property('enable_batch_process', tracker_enable_batch_process)
+        if key == 'enable-past-frame':
+            tracker_enable_past_frame = config.getint('tracker', key)
+            tracker.set_property('enable_past_frame', tracker_enable_past_frame)
+
+
 def create_pipeline_element(element_type, element_name):
     """
     Create Gst pipeline element
@@ -405,7 +444,8 @@ def create_pipeline(urls):
     queue2 = Gst.ElementFactory.make("queue", "queue2")
     queue3 = Gst.ElementFactory.make("queue", "queue3")
     queue4 = Gst.ElementFactory.make("queue", "queue4")
-    queue5 = Gst.ElementFactory.make("queue", "queue4")
+    queue5 = Gst.ElementFactory.make("queue", "queue5")
+    queue6 = Gst.ElementFactory.make("queue", "queue6")
 
     pgie = create_pipeline_element("nvinfer", "primary-inference")
     tracker = create_pipeline_element("nvtracker", "tracker")
@@ -430,7 +470,7 @@ def create_pipeline(urls):
     streammux.set_property('batch-size', number_sources)
     streammux.set_property('batched-push-timeout', MUXER_BATCH_TIMEOUT_USEC)
     pgie.set_property('output-tensor-meta', True)
-    pgie.set_property('config-file-path', "configs/deepstream_pose_estimation_config.txt")
+    pgie.set_property('config-file-path', "config/deepstream_pose_estimation_config.txt")
     pgie_batch_size = pgie.get_property("batch-size")
     if pgie_batch_size != number_sources:
         print("WARNING: Overriding infer-config batch-size {0} with number of sources {1} \n".format(pgie_batch_size,
@@ -452,8 +492,10 @@ def create_pipeline(urls):
     pipeline.add(queue3)
     pipeline.add(queue4)
     pipeline.add(queue5)
+    pipeline.add(queue6)
     pipeline.add(pgie)
     pipeline.add(tiler)
+    pipeline.add(tracker)
     pipeline.add(nvvidconv)
     pipeline.add(nvosd)
 
@@ -468,18 +510,20 @@ def create_pipeline(urls):
     streammux.link(queue1)
     queue1.link(pgie)
     pgie.link(queue2)
-    queue2.link(tiler)
-    tiler.link(queue3)
-    queue3.link(nvvidconv)
-    nvvidconv.link(queue4)
-    queue4.link(nvosd)
+    queue2.link(tracker)
+    tracker.link(queue3)
+    queue3.link(tiler)
+    tiler.link(queue4)
+    queue4.link(nvvidconv)
+    nvvidconv.link(queue5)
+    queue5.link(nvosd)
     if is_aarch64():
-        nvosd.link(queue5)
-        queue5.link(transform)
+        nvosd.link(queue6)
+        queue6.link(transform)
         transform.link(sink)
     else:
-        nvosd.link(queue5)
-        queue5.link(sink)
+        nvosd.link(queue6)
+        queue6.link(sink)
 
     pgie_src_pad = pgie.get_static_pad("src")
     if not pgie_src_pad:

@@ -34,5 +34,5 @@ gpu-id=0
 ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_mot_klt.so
 #ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvdcf.so
 ll-config-file=tracker_config.yml
-#enable-past-frame=1
+enable-past-frame=1
 enable-batch-process=1

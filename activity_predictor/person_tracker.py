@@ -1,3 +1,5 @@
+from collections import deque
+
 from utils import id_gen
 from constants import BODY_LABELS, BODY_IDX
 
