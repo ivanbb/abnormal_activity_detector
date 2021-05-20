@@ -1,0 +1,17 @@
+MAX_DISPLAY_LEN = 64
+PGIE_CLASS_ID_VEHICLE = 0
+PGIE_CLASS_ID_BICYCLE = 1
+PGIE_CLASS_ID_PERSON = 2
+PGIE_CLASS_ID_ROADSIGN = 3
+MUXER_OUTPUT_WIDTH = 800
+MUXER_OUTPUT_HEIGHT = 600
+MUXER_BATCH_TIMEOUT_USEC = 4000000
+TILED_OUTPUT_WIDTH = 1280
+TILED_OUTPUT_HEIGHT = 720
+GST_CAPS_FEATURES_NVMM = "memory:NVMM"
+OSD_PROCESS_MODE = 0
+OSD_DISPLAY_TEXT = 1
+MAX_ELEMENTS_IN_DISPLAY_META = 16
+BODY_LABELS = {0: 'nose', 1: 'lEye', 2: 'rEye', 3: 'lEar', 4: 'rEar', 5: 'lShoulder', 6: 'rShoulder',
+               7: 'lElbow', 8: 'rElbow', 9: 'lWrist', 10: 'rWrist', 11: 'lHip', 12: 'rHip', 13: 'lKnee', 14: 'rKnee',
+               15: 'lAnkle', 16: 'rAnkle', 17: 'neck'}

@@ -1,19 +1,11 @@
-class CreatePipelineElementError(Exception):
+class CreatePipelineException(Exception):
     """
      Exception raised for errors when creating Gst pipeline element.
 
      Attributes:
-        element_name -- name of element
+        message -- error message
     """
 
-    def __init__(self, element):
-        self.element = element
-        super().__init__("Unable to create {0}".format(element))
-        
-class CreatePipelineError(Exception):
-    """
-     Exception raised for errors when creating pipeline.
-    """
-
-    def __init__(self):
-        super().__init__("Unable to create pipline")
+    def __init__(self, message="Unable to create pipeline"):
+        self.message = message
+        super().__init__(message)
