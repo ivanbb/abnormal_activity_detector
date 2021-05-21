@@ -56,7 +56,6 @@ def create_frame_objects(body_parts):
     objects_list = []
     for body in body_parts:
         bbox = get_bbox(list(body.values()))
-        # bodies_boxes.append((bbox, body))
         res = pyds.NvDsInferObjectDetectionInfo()
 
         rect_x1_f, rect_y1_f, rect_x2_f, rect_y2_f = bbox
@@ -85,10 +84,6 @@ def add_obj_meta_to_frame(frame_object, batch_meta, frame_meta):
     rect_params.border_width = 3
     rect_params.border_color.set(1, 0, 0, 1)
 
-    # Set object info including class, detection confidence, etc.
-    #obj_meta.confidence = frame_object.detectionConfidence
-    #obj_meta.class_id = frame_object.classId
-
     # There is no tracking ID upon detection. The tracker will
     # assign an ID.
     obj_meta.object_id = UNTRACKED_OBJECT_ID
@@ -96,3 +91,5 @@ def add_obj_meta_to_frame(frame_object, batch_meta, frame_meta):
     # Inser the object into current frame meta
     # This object has no parent
     pyds.nvds_add_obj_meta_to_frame(frame_meta, obj_meta, None)
+
+    return obj_meta

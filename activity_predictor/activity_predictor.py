@@ -5,131 +5,70 @@ import random
 import numpy as np
 from collections import deque
 import pyds
+from utils import id_gen
+import tensorflow as tf
+
 from person_tracker import PersonTracker
-from constants import window, motion_dict, pose_vec_dim 
-
-trackers = []
 
 
-def IOU(boxA, boxB):
-    # pyimagesearch: determine the (x, y)-coordinates of the intersection rectangle
-    xA = max(boxA[0], boxB[0])
-    yA = max(boxA[1], boxB[1])
-    xB = min(boxA[2], boxB[2])
-    yB = min(boxA[3], boxB[3])
+class ActivityPredictor:
+    def __init__(
+            self,
+            model_path='models/lstm_spin_squat.h5',
+            window=3,
+            pose_vec_dim=36,
+            motion_dict=None
+    ):
+        self.motion_dict = {0: 'spin', 1: 'squat'} if motion_dict is None else motion_dict
+        self.window = window
+        self.pose_vec_dim = pose_vec_dim
+        self.secondary_model = tf.keras.models.load_model(model_path)
+        self.tracked_objects = []
+        self.untracked_objects = {}
+        print("Activity predictor initialised successfully")
 
-    # compute the area of intersection rectangle
-    interArea = max(0, xB - xA + 1) * max(0, yB - yA + 1)
+    def add_untracked_pose_dict(self, rect_params, pose_dict):
+        self.untracked_objects[rect_params] = pose_dict
 
-    # compute the area of both the prediction and ground-truth
-    # rectangles
-    boxAArea = (boxA[2] - boxA[0] + 1) * (boxA[3] - boxA[1] + 1)
-    boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
+    def __remove_not_relevant_trackers(self, objects_meta):
+        relevant_ids = [obj_meta.object_id for obj_meta in objects_meta]
+        self.tracked_objects = list(filter(lambda x: (x.obj_meta.object_id in relevant_ids), self.tracked_objects))
 
-    # compute the intersection over union by taking the intersection
-    # area and dividing it by the sum of prediction + ground-truth
-    # areas - the interesection area
-    iou = interArea / float(boxAArea + boxBArea - interArea)
+    def update_person_trackers(self, objects_meta):
+        for obj_meta in objects_meta:
+            found_person_tracker = list(filter(
+                lambda tracker: (tracker.obj_meta.object_id == obj_meta.object_id),
+                self.tracked_objects
+            ))
+            if len(found_person_tracker):
+                person_tracker = found_person_tracker[0]
+            else:
+                person_tracker = PersonTracker(obj_meta)
+                self.tracked_objects.append(person_tracker)
 
-    # return the intersection over union value
-    return iou
+            try:
+                rect_params = self.untracked_objects[obj_meta.rect_params]
+            except KeyError:
+                print("Update person tracker error: "
+                      "Unable to find pose_dict for specified rect_params. id: {0}".format(obj_meta.object_id))
+                continue
 
+            person_tracker.update_pose(rect_params, obj_meta.rect_params)
+            person_tracker.obj_meta = obj_meta
+            self.untracked_objects.pop(obj_meta.rect_params)
+            print("Tracker {0} updated".format(person_tracker.obj_meta.object_id))
 
-def get_bbox(kp_list):
-    bbox = []
-    for aggs in [min, max]:
-        for idx in range(2):
-            bound = aggs(kp_list, key=itemgetter(idx))[idx]
-            bbox.append(bound)
-    return bbox
+        self.__remove_not_relevant_trackers(objects_meta)
 
-def tracker_match(trackers, detections, iou_thrd = 0.3):
-    '''
-    From current list of trackers and new detections, output matched detections,
-    unmatched trackers, unmatched detections.
-    https://towardsdatascience.com/computer-vision-for-tracking-8220759eee85
-    '''
-
-    IOU_mat= np.zeros((len(trackers),len(detections)),dtype=np.float32)
-    for t,trk in enumerate(trackers):
-        for d,det in enumerate(detections):
-            IOU_mat[t,d] = IOU(trk,det)
-
-    # Produces matches
-    # Solve the maximizing the sum of IOU assignment problem using the
-    # Hungarian algorithm (also known as Munkres algorithm)
-
-    print("IOU_mat: {0}".format(IOU_mat))
-    matched_idx = linear_sum_assignment(-IOU_mat)
-    matched_idx = np.asarray(matched_idx)
-    matched_idx = np.transpose(matched_idx)
-    print("matched_idx: {0}".format(matched_idx))
-    unmatched_trackers, unmatched_detections = [], []
-    for t,trk in enumerate(trackers):
-        if(t not in matched_idx[:,0]):
-            unmatched_trackers.append(t)
-
-    for d, det in enumerate(detections):
-        if(d not in matched_idx[:,1]):
-            unmatched_detections.append(d)
-
-    matches = []
-
-    # For creating trackers we consider any detection with an
-    # overlap less than iou_thrd to signifiy the existence of
-    # an untracked object
-
-    for m in matched_idx:
-        if(IOU_mat[m[0],m[1]] < iou_thrd):
-            unmatched_trackers.append(m[0])
-            unmatched_detections.append(m[1])
-        else:
-            matches.append(m.reshape(1,2))
-
-    if(len(matches)==0):
-        matches = np.empty((0,2),dtype=int)
-    else:
-        matches = np.concatenate(matches,axis=0)
-
-    return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
-
-
-def predict_activity(secondary_model, pose_list, frame_meta, frame_width, frame_height):
-    bboxes = []
-
-    for body in pose_list:
-            bbox = get_bbox(list(body.values()))
-            bboxes.append((bbox, body))
-
-    print("pose_list {0}".format(pose_list))
-
-    track_boxes = [tracker.bbox for tracker in trackers]
-    matched, unmatched_trackers, unmatched_detections = tracker_match(track_boxes, [b[0] for b in bboxes])
-
-    for idx, jdx in matched:
-            trackers[idx].set_bbox(bboxes[jdx][0])
-            trackers[idx].update_pose(bboxes[jdx][1])
-
-    for idx in unmatched_detections:
-        try:
-            trackers.pop(idx)
-        except:
-            pass
-
-    for idx in unmatched_trackers:
-        person = PersonTracker()
-        person.set_bbox(bboxes[idx][0])
-        person.update_pose(bboxes[idx][1])
-        trackers.append(person)
-
-    for tracker in trackers:
-        print(len(tracker.q))
-        if len(tracker.q) >= 3:
-            sample = np.array(list(tracker.q)[:3])
-            sample = sample.reshape(1, pose_vec_dim, window)
-            pred_activity = motion_dict[np.argmax(secondary_model.predict(sample)[0])]
-            tracker.activity = pred_activity
-            tracker.annotate(frame_meta, frame_width, frame_height)
-            print(pred_activity)
+    def predict_activity(self):
+        for tracker in self.tracked_objects:
+            print(len(tracker.states))
+            if len(tracker.states) >= 3:
+                sample = np.array(list(tracker.states)[:3])
+                sample = sample.reshape(1, self.pose_vec_dim, self.window)
+                predicted_activity = self.motion_dict[int(np.argmax(self.secondary_model.predict(sample)[0]))]
+                tracker.activity = predicted_activity
+                tracker.annotate()
+                print(predicted_activity)
 
 

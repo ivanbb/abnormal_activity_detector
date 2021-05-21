@@ -24,6 +24,8 @@
 
 import sys
 
+from activity_predictor.activity_predictor import ActivityPredictor
+
 sys.path.append('../')
 import gi
 import configparser
@@ -46,8 +48,8 @@ from torch.utils import dlpack
 import torch
 import numpy as np
 from operator import itemgetter
-#import tensorflow as tf
-#from activity_predictor import *
+# import tensorflow as tf
+# from activity_predictor import *
 from exceptions import CreatePipelineException
 from detected_objects_parser import BodyPartsParser, create_frame_objects, add_obj_meta_to_frame
 from constants import *
@@ -59,12 +61,8 @@ body_idx = dict([[v, k] for k, v in BODY_LABELS.items()])
 
 trackers = []
 
-#secondary_model = tf.keras.models.load_model('models/lstm_spin_squat.h5')
-window = 3
-pose_vec_dim = 36
-motion_dict = {0: 'spin', 1: 'squat'}
-
 body_parts_parser = BodyPartsParser()
+activity_predictor = ActivityPredictor(window=POSE_PREDICT_WINDOW, pose_vec_dim=POSE_VEC_DIM, motion_dict=MOTION_DICT)
 
 
 def create_display_meta(objects, count, normalized_peaks, frame_meta, frame_width, frame_height):
@@ -179,7 +177,7 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
             body_list = create_display_meta(objects, counts, normalized_peaks, frame_meta, TILED_OUTPUT_WIDTH,
                                             TILED_OUTPUT_HEIGHT)
 
-            #predict_activity(secondary_model, body_list, frame_meta, MUXER_OUTPUT_WIDTH, MUXER_OUTPUT_HEIGHT)
+            # predict_activity(secondary_model, body_list, frame_meta, MUXER_OUTPUT_WIDTH, MUXER_OUTPUT_HEIGHT)
 
             try:
                 l_user = l_user.next
@@ -188,7 +186,8 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
 
             frame_object_list = create_frame_objects(body_list)
             for frame_object in frame_object_list:
-                add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
+                obj_meta = add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
+                activity_predictor.add_untracked_pose_dict(obj_meta.rect_params, body_list)
 
         try:
             l_frame = l_frame.next
@@ -225,16 +224,23 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
         frame_number = frame_meta.frame_num
         num_rects = frame_meta.num_obj_meta
         l_obj = frame_meta.obj_meta_list
+        objects_meta = []
         while l_obj is not None:
             try:
                 # Casting l_obj.data to pyds.NvDsObjectMeta
                 obj_meta = pyds.glist_get_nvds_object_meta(l_obj.data)
+                print("object tracker id: {0}, left: {1}".format(obj_meta.object_id, obj_meta.rect_params.left))
+                objects_meta.append(obj_meta)
+
             except StopIteration:
                 break
             try:
                 l_obj = l_obj.next
             except StopIteration:
                 break
+
+        activity_predictor.update_person_trackers(objects_meta)
+        activity_predictor.predict_activity()
 
         # Acquiring a display meta object. The memory ownership remains in
         # the C code so downstream plugins can still access it. Otherwise
@@ -273,10 +279,12 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
 
     return Gst.PadProbeReturn.OK
 
-def decodebin_child_added(child_proxy,Object,name,user_data):
+
+def decodebin_child_added(child_proxy, Object, name, user_data):
     print("Decodebin child added:", name, "\n")
-    if(name.find("decodebin") != -1):
-        Object.connect("child-added",decodebin_child_added,user_data)   
+    if (name.find("decodebin") != -1):
+        Object.connect("child-added", decodebin_child_added, user_data)
+
 
 def cb_newpad(decodebin, decoder_src_pad, data):
     caps = decoder_src_pad.get_current_caps()
@@ -333,7 +341,7 @@ def create_source_bin(index, uri):
     # Connect to the "pad-added" signal of the decodebin which generates a
     # callback once a new pad for raw data has beed created by the decodebin
     uri_decode_bin.connect("pad-added", cb_newpad, nbin)
-    uri_decode_bin.connect("child-added",decodebin_child_added,nbin)
+    uri_decode_bin.connect("child-added", decodebin_child_added, nbin)
 
     # We need to create a ghost pad for the source bin which will act as a proxy
     # for the video decoder src pad. The ghost pad will not have a target right
