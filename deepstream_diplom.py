@@ -57,7 +57,6 @@ from constants import *
 import pyds
 
 fps_streams = {}
-body_idx = dict([[v, k] for k, v in BODY_LABELS.items()])
 
 trackers = []
 
@@ -186,9 +185,8 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
 
             frame_object_list = create_frame_objects(body_list)
             for frame_object in frame_object_list:
-                obj_meta = add_obj_meta_to_frame(frame_object, batch_meta, frame_meta)
-                activity_predictor.add_untracked_pose_dict(obj_meta.rect_params, body_list)
-
+                obj_meta = add_obj_meta_to_frame(frame_object['frame_object'], batch_meta, frame_meta)
+                activity_predictor.add_untracked_pose_dict(obj_meta.unique_component_id, frame_object['body'])
         try:
             l_frame = l_frame.next
         except StopIteration:
@@ -231,7 +229,6 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
                 obj_meta = pyds.glist_get_nvds_object_meta(l_obj.data)
                 print("object tracker id: {0}, left: {1}".format(obj_meta.object_id, obj_meta.rect_params.left))
                 objects_meta.append(obj_meta)
-
             except StopIteration:
                 break
             try:
@@ -240,7 +237,7 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
                 break
 
         activity_predictor.update_person_trackers(objects_meta)
-        activity_predictor.predict_activity()
+        activity_predictor.predict_activity(frame_meta)
 
         # Acquiring a display meta object. The memory ownership remains in
         # the C code so downstream plugins can still access it. Otherwise
@@ -282,8 +279,12 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
 
 def decodebin_child_added(child_proxy, Object, name, user_data):
     print("Decodebin child added:", name, "\n")
-    if (name.find("decodebin") != -1):
+    if name.find("decodebin") != -1:
         Object.connect("child-added", decodebin_child_added, user_data)
+
+    if name.find("nvv4l2decoder") != -1:
+        print("Setting drop frame interval\n")
+        Object.set_property("drop-frame-interval", 7)
 
 
 def cb_newpad(decodebin, decoder_src_pad, data):
@@ -496,7 +497,7 @@ def create_pipeline(urls):
     tiler.set_property("columns", tiler_columns)
     tiler.set_property("width", TILED_OUTPUT_WIDTH)
     tiler.set_property("height", TILED_OUTPUT_HEIGHT)
-    sink.set_property("qos", 0)
+    sink.set_property("qos", 1)
     sink.set_property("sync", 0)
     configure_tracker(tracker)
 

@@ -1,8 +1,12 @@
 from collections import deque
 
-from utils import id_gen
 from constants import BODY_LABELS, BODY_IDX
 import numpy as np
+import sys
+
+sys.path.append('../')
+from common.is_aarch_64 import is_aarch64
+import pyds
 
 
 class PersonTracker:
@@ -24,30 +28,27 @@ class PersonTracker:
         self.states.append(ft_vec)
         return
 
-    def annotate(self):
-        self.obj_meta.obj_label = self.activity
-        # if (dmeta.num_labels == 16):
-        #     dmeta = pyds.nvds_acquire_display_meta_from_pool(bmeta)
-        #     pyds.nvds_add_display_meta_to_frame(frame_meta, dmeta)
+    def annotate(self, frame_meta):
+        #self.obj_meta.obj_label = self.activity
+        # Set display text for the object.
+        txt_params = self.obj_meta.text_params
+        #if txt_params.display_text:
+        #   pyds.free_buffer(txt_params.display_text)
 
-        # # Set display text for the object.
-        # txt_params = dmeta.text_params[dmeta.num_labels]
-        # if txt_params.display_text:
-        #     pyds.free_buffer(txt_params.display_text)
-        #
-        # txt_params.x_offset = int(rect_params.left)
-        # txt_params.y_offset = max(0, int(rect_params.top) - 10)
-        # txt_params.display_text = self.activity
-        # # Font , font-color and font-size
-        # txt_params.font_params.font_name = "Serif"
-        # txt_params.font_params.font_size = 10
-        # # set(red, green, blue, alpha); set to White
-        # txt_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
-        #
-        # # Text background color
-        # txt_params.set_bg_clr = 1
-        # # set(red, green, blue, alpha); set to Black
-        # txt_params.text_bg_clr.set(0.0, 0.0, 0.0, 1.0)
-        # dmeta.num_labels = dmeta.num_labels + 1
+        txt_params.x_offset = int( self.obj_meta.rect_params.left)
+        txt_params.y_offset = max(0, int( self.obj_meta.rect_params.top) - 10)
+        txt_params.display_text = self.activity
+        # Font , font-color and font-size
+        txt_params.font_params.font_name = "Serif"
+        txt_params.font_params.font_size = 10
+        #set(red, green, blue, alpha); set to White
+        txt_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
 
-        # pyds.nvds_add_display_meta_to_frame(frame_meta, dmeta)
+        # Text background color
+        txt_params.set_bg_clr = 1
+         #set(red, green, blue, alpha); set to Black
+        txt_params.text_bg_clr.set(0.0, 0.0, 0.0, 1.0)
+
+        # Inser the object into current frame meta
+        # This object has no parent
+        #pyds.nvds_add_obj_meta_to_frame(frame_meta, self.obj_meta, None)

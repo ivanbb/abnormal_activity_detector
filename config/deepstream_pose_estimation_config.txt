@@ -54,6 +54,6 @@ interval=0
 gie-unique-id=1
 model-engine-file=../models/pose_estimation.onnx_b1_gpu0_fp16.engine
 network-type=100
-workspace-size=500
+workspace-size=100
 
 

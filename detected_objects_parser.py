@@ -63,7 +63,7 @@ def create_frame_objects(body_parts):
         res.top = rect_y1_f
         res.width = rect_x2_f - rect_x1_f
         res.height = rect_y2_f - rect_y1_f
-        objects_list.append(res)
+        objects_list.append({'frame_object': res, 'body': body})
     return objects_list
 
 
