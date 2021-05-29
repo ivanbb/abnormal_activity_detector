@@ -1,12 +1,10 @@
 from collections import deque
 
-from constants import BODY_LABELS, BODY_IDX
+from config.app_config import BODY_LABELS, BODY_IDX
 import numpy as np
 import sys
 
 sys.path.append('../')
-from common.is_aarch_64 import is_aarch64
-import pyds
 
 
 class PersonTracker:
@@ -28,27 +26,22 @@ class PersonTracker:
         self.states.append(ft_vec)
         return
 
-    def annotate(self, frame_meta):
-        #self.obj_meta.obj_label = self.activity
-        # Set display text for the object.
+    def annotate(self):
         txt_params = self.obj_meta.text_params
-        #if txt_params.display_text:
-        #   pyds.free_buffer(txt_params.display_text)
 
-        txt_params.x_offset = int( self.obj_meta.rect_params.left)
-        txt_params.y_offset = max(0, int( self.obj_meta.rect_params.top) - 10)
-        txt_params.display_text = self.activity
+        txt_params.x_offset = int(self.obj_meta.rect_params.left)
+        txt_params.y_offset = max(0, int(self.obj_meta.rect_params.top) - 10)
+        txt_params.display_text = self.activity if self.activity else 'None'
         # Font , font-color and font-size
         txt_params.font_params.font_name = "Serif"
         txt_params.font_params.font_size = 10
-        #set(red, green, blue, alpha); set to White
         txt_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
 
         # Text background color
         txt_params.set_bg_clr = 1
-         #set(red, green, blue, alpha); set to Black
         txt_params.text_bg_clr.set(0.0, 0.0, 0.0, 1.0)
 
-        # Inser the object into current frame meta
-        # This object has no parent
-        #pyds.nvds_add_obj_meta_to_frame(frame_meta, self.obj_meta, None)
+        # if self.activity:
+        #     rect_params = self.obj_meta.rect_params
+        #     rect_params.has_bg_color = 0
+        #     rect_params.bg_color.set(1, 0, 0, 0.4)

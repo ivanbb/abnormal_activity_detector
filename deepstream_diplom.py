@@ -32,27 +32,15 @@ import configparser
 
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
-from gi.repository import GLib
-from ctypes import *
-import time
 import sys
 import math
-import platform
 from common.is_aarch_64 import is_aarch64
 from common.bus_call import bus_call
 from common.FPS import GETFPS
-import json
-import trt_pose.coco
-from pprint import pprint
-from torch.utils import dlpack
-import torch
-import numpy as np
-from operator import itemgetter
-# import tensorflow as tf
-# from activity_predictor import *
+
 from exceptions import CreatePipelineException
 from detected_objects_parser import BodyPartsParser, create_frame_objects, add_obj_meta_to_frame
-from constants import *
+from config.app_config import *
 
 import pyds
 
@@ -61,7 +49,12 @@ fps_streams = {}
 trackers = []
 
 body_parts_parser = BodyPartsParser()
-activity_predictor = ActivityPredictor(window=POSE_PREDICT_WINDOW, pose_vec_dim=POSE_VEC_DIM, motion_dict=MOTION_DICT)
+activity_predictor = ActivityPredictor(
+    window=POSE_PREDICT_WINDOW,
+    pose_vec_dim=POSE_VEC_DIM,
+    motion_dict=MOTION_DICT,
+    prediction_threshold=PREDICTION_THRESHOLD
+)
 
 
 def create_display_meta(objects, count, normalized_peaks, frame_meta, frame_width, frame_height):
@@ -176,8 +169,6 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
             body_list = create_display_meta(objects, counts, normalized_peaks, frame_meta, TILED_OUTPUT_WIDTH,
                                             TILED_OUTPUT_HEIGHT)
 
-            # predict_activity(secondary_model, body_list, frame_meta, MUXER_OUTPUT_WIDTH, MUXER_OUTPUT_HEIGHT)
-
             try:
                 l_user = l_user.next
             except StopIteration:
@@ -195,9 +186,6 @@ def pgie_src_pad_buffer_probe(pad, info, u_data):
 
 
 def osd_sink_pad_buffer_probe(pad, info, u_data):
-    frame_number = 0
-    num_rects = 0
-
     gst_buffer = info.get_buffer()
     if not gst_buffer:
         print("Unable to get GstBuffer ")
@@ -219,8 +207,6 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
         except StopIteration:
             break
 
-        frame_number = frame_meta.frame_num
-        num_rects = frame_meta.num_obj_meta
         l_obj = frame_meta.obj_meta_list
         objects_meta = []
         while l_obj is not None:
@@ -237,38 +223,8 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
                 break
 
         activity_predictor.update_person_trackers(objects_meta)
-        activity_predictor.predict_activity(frame_meta)
+        activity_predictor.predict_activity()
 
-        # Acquiring a display meta object. The memory ownership remains in
-        # the C code so downstream plugins can still access it. Otherwise
-        # the garbage collector will claim it when this probe function exits.
-        # display_meta=pyds.nvds_acquire_display_meta_from_pool(batch_meta)
-        # display_meta.num_labels = 1
-        # py_nvosd_text_params = display_meta.text_params[0]
-        # Setting display text to be shown on screen
-        # Note that the pyds module allocates a buffer for the string, and the
-        # memory will not be claimed by the garbage collector.
-        # Reading the display_text field here will return the C address of the
-        # allocated string. Use pyds.get_string() to get the string content.
-        # py_nvosd_text_params.display_text = "Frame Number={} Number of Objects={} Vehicle_count={} Person_count={}".format(frame_number, num_rects, obj_counter[PGIE_CLASS_ID_VEHICLE], obj_counter[PGIE_CLASS_ID_PERSON])
-
-        # Now set the offsets where the string should appear
-        # py_nvosd_text_params.x_offset = 10
-        # py_nvosd_text_params.y_offset = 12
-
-        # Font , font-color and font-size
-        # py_nvosd_text_params.font_params.font_name = "Serif"
-        # py_nvosd_text_params.font_params.font_size = 10
-        # set(red, green, blue, alpha); set to White
-        # py_nvosd_text_params.font_params.font_color.set(1.0, 1.0, 1.0, 1.0)
-
-        # Text background color
-        # py_nvosd_text_params.set_bg_clr = 1
-        # set(red, green, blue, alpha); set to Black
-        # py_nvosd_text_params.text_bg_clr.set(0.0, 0.0, 0.0, 1.0)
-        # Using pyds.get_string() to get display_text as string
-        # print(pyds.get_string(py_nvosd_text_params.display_text))
-        # pyds.nvds_add_display_meta_to_frame(frame_meta, display_meta)
         try:
             l_frame = l_frame.next
         except StopIteration:
@@ -460,12 +416,16 @@ def create_pipeline(urls):
     queue4 = Gst.ElementFactory.make("queue", "queue4")
     queue5 = Gst.ElementFactory.make("queue", "queue5")
     queue6 = Gst.ElementFactory.make("queue", "queue6")
+    queue7 = Gst.ElementFactory.make("queue","queue7")
 
     pgie = create_pipeline_element("nvinfer", "primary-inference")
     tracker = create_pipeline_element("nvtracker", "tracker")
+    nvanalytics = create_pipeline_element("nvdsanalytics", "analytics")
     tiler = create_pipeline_element("nvmultistreamtiler", "nvtiler")
     nvvidconv = create_pipeline_element("nvvideoconvert", "convertor")
     nvosd = create_pipeline_element("nvdsosd", "onscreendisplay")
+
+    nvanalytics.set_property("config-file", "config/nvdsanalytics_config.txt")
 
     nvosd.set_property('process-mode', OSD_PROCESS_MODE)
     nvosd.set_property('display-text', OSD_DISPLAY_TEXT)
@@ -509,9 +469,11 @@ def create_pipeline(urls):
     pipeline.add(queue4)
     pipeline.add(queue5)
     pipeline.add(queue6)
+    pipeline.add(queue7)
     pipeline.add(pgie)
     pipeline.add(tiler)
     pipeline.add(tracker)
+    pipeline.add(nvanalytics)
     pipeline.add(nvvidconv)
     pipeline.add(nvosd)
 
@@ -528,18 +490,20 @@ def create_pipeline(urls):
     pgie.link(queue2)
     queue2.link(tracker)
     tracker.link(queue3)
-    queue3.link(tiler)
-    tiler.link(queue4)
-    queue4.link(nvvidconv)
-    nvvidconv.link(queue5)
-    queue5.link(nvosd)
+    queue3.link(nvanalytics)
+    nvanalytics.link(queue4)
+    queue4.link(tiler)
+    tiler.link(queue5)
+    queue5.link(nvvidconv)
+    nvvidconv.link(queue6)
+    queue6.link(nvosd)
     if is_aarch64():
-        nvosd.link(queue6)
-        queue6.link(transform)
+        nvosd.link(queue7)
+        queue7.link(transform)
         transform.link(sink)
     else:
-        nvosd.link(queue6)
-        queue6.link(sink)
+        nvosd.link(queue7)
+        queue7.link(sink)
 
     # create an event loop and feed gstreamer bus messages to it
     loop = GObject.MainLoop()

@@ -6,7 +6,7 @@ import pyds
 from ctypes import *
 import numpy as np
 from torch import Tensor
-from constants import UNTRACKED_OBJECT_ID, MUXER_OUTPUT_WIDTH, MUXER_OUTPUT_HEIGHT
+from config.app_config import UNTRACKED_OBJECT_ID
 import json
 
 
