@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from pickle import load
 
-from app.activity_predictor.person_tracker import PersonTracker
+from activity_predictor.person_tracker import PersonTracker
 
 
 class ActivityPredictor:

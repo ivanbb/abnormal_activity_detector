@@ -1,6 +1,6 @@
 from collections import deque
 
-from app.config.app_config import BODY_LABELS, BODY_IDX
+from config.app_config import BODY_LABELS, BODY_IDX
 import numpy as np
 import sys
 

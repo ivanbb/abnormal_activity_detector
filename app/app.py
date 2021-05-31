@@ -4,7 +4,7 @@ import sys
 
 from activity_predictor.activity_predictor import ActivityPredictor
 
-sys.path.append('../../')
+sys.path.append('../')
 import gi
 import configparser
 
@@ -54,25 +54,26 @@ def create_display_meta(objects, count, normalized_peaks, frame_meta, frame_widt
                 peak = normalized_peaks[0][j][peak_idx]
                 x = round(float(peak[1]) * frame_width)
                 y = round(float(peak[0]) * frame_height)
+                
+                if DRAW_TRT_POSE_ARTIFACTS:
+                    if dmeta.num_circles == MAX_ELEMENTS_IN_DISPLAY_META:
+                        dmeta = pyds.nvds_acquire_display_meta_from_pool(bmeta)
+                        pyds.nvds_add_display_meta_to_frame(frame_meta, dmeta)
 
-                if dmeta.num_circles == MAX_ELEMENTS_IN_DISPLAY_META and DRAW_TRT_POSE_ARTIFACTS:
-                   dmeta = pyds.nvds_acquire_display_meta_from_pool(bmeta)
-                   pyds.nvds_add_display_meta_to_frame(frame_meta, dmeta)
-
-                cparams = dmeta.circle_params[dmeta.num_circles]
-                cparams.xc = x
-                cparams.yc = y
-                cparams.radius = 8
-                cparams.circle_color.set(244, 67, 54, 1)
-                cparams.has_bg_color = 1
-                cparams.bg_color.set(0, 255, 0, 1)
-                dmeta.num_circles = dmeta.num_circles + 1
+                    cparams = dmeta.circle_params[dmeta.num_circles]
+                    cparams.xc = x
+                    cparams.yc = y
+                    cparams.radius = 8
+                    cparams.circle_color.set(244, 67, 54, 1)
+                    cparams.has_bg_color = 1
+                    cparams.bg_color.set(0, 255, 0, 1)
+                    dmeta.num_circles = dmeta.num_circles + 1
                 body_dict[BODY_LABELS[j]] = (x, y)
                 
         body_list.append(body_dict)
 
         if not DRAW_TRT_POSE_ARTIFACTS:
-            return body_list
+            continue
 
         for peak_idx in range(peaks_count):
             c_a = body_parts_parser.topology[peak_idx][2]
