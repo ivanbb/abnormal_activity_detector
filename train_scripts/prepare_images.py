@@ -1,29 +1,29 @@
-from operator import itemgetter
-
 from transformer import TRTPoseExtractor
 import cv2
 import os
 import pandas as pd
 import argparse
 
+from app.detected_objects_parser import get_bbox
+from app.config.app_config import DROP_FRAME_INTERVAL
+
 video_dir = ''
 image_dir = ''
 csv_path = ''
-frame_interval = 5
 
 extractor = TRTPoseExtractor()
 
 
-def get_bbox(kp_list):
-    bbox = []
-    for aggs in [min, max]:
-        for idx in range(2):
-            bound = aggs(kp_list, key=itemgetter(idx))[idx]
-            bbox.append(bound)
-    return bbox
-
-
 def extract_images(video_path, parsed_data_arr):
+    """
+    Make dataset from video
+    Args:
+        video_path:
+        parsed_data_arr:
+
+    Returns:
+
+    """
     cap = cv2.VideoCapture('{0}'.format(video_path))
     # Check if camera opened successfully
     filename = video_path.split('/')[-1]
@@ -35,7 +35,7 @@ def extract_images(video_path, parsed_data_arr):
         # Capture frame-by-frame
         ret, frame = cap.read()
         if ret:
-            if frame_num % frame_interval == 0:
+            if frame_num % DROP_FRAME_INTERVAL == 0:
                 print('inference frame {0} from file {1}'.format(frame_num, video_path))
                 sample = extractor.transform([frame])
                 print(sample)

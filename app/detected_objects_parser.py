@@ -11,6 +11,9 @@ import json
 
 
 class BodyPartsParser:
+    """
+    Parse trt_pose output and return detected objets
+    """
     def __init__(self):
         with open('config/human_pose.json', 'r') as f:
             human_pose = json.load(f)
@@ -44,6 +47,14 @@ class BodyPartsParser:
 
 
 def get_bbox(kp_list):
+    """
+    Get boxes for found objects
+    Args:
+        kp_list: list on body parts found in image
+
+    Returns:
+        bbox: boundary boxes coordinates
+    """
     bbox = []
     for aggs in [min, max]:
         for idx in range(2):
@@ -52,9 +63,17 @@ def get_bbox(kp_list):
     return bbox
 
 
-def create_frame_objects(body_parts):
+def create_frame_objects(body_list):
+    """
+    Create NvDsInferObjectDetectionInfo for found bodies objects
+    Args:
+        body_list:
+
+    Returns:
+        objects_list
+    """
     objects_list = []
-    for body in body_parts:
+    for body in body_list:
         bbox = get_bbox(list(body.values()))
         res = pyds.NvDsInferObjectDetectionInfo()
 
@@ -68,7 +87,16 @@ def create_frame_objects(body_parts):
 
 
 def add_obj_meta_to_frame(frame_object, batch_meta, frame_meta):
-    """ Inserts an object into the metadata """
+    """
+    Inserts an object into the metadata for tracking
+    Args:
+        frame_object:
+        batch_meta:
+        frame_meta:
+
+    Returns:
+        obj_meta
+    """
     # this is a good place to insert objects into the metadata.
     # Here's an example of inserting a single object.
     obj_meta = pyds.nvds_acquire_obj_meta_from_pool(batch_meta)

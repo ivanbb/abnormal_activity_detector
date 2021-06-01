@@ -12,6 +12,9 @@ from trt_pose.parse_objects import ParseObjects
 
 
 class TRTPoseExtractor(BaseEstimator, TransformerMixin):
+    """
+    Apply trt_pose model to frame
+    """
     def __init__(self, model_path='../app/models/resnet18_baseline_att_224x224_A_epoch_249_trt.pth'):
         self.model_path = model_path
         with open('../app/config/human_pose.json', 'r') as f:
@@ -26,12 +29,10 @@ class TRTPoseExtractor(BaseEstimator, TransformerMixin):
         self.get_keypoints = GetKeypoints(self.topology)
 
     def preprocess(self, image):
-        global device
-        device = torch.device('cuda')
         image = cv2.resize(image, (224, 224))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(image)
-        image = transforms.functional.to_tensor(image).to(device)
+        image = transforms.functional.to_tensor(image).to(self.device)
         image.sub_(self.mean[:, None, None]).div_(self.std[:, None, None])
         return image[None, ...]
 
@@ -55,6 +56,9 @@ class TRTPoseExtractor(BaseEstimator, TransformerMixin):
 
 
 class GetKeypoints(object):
+    """
+    Post-process for trt_pose inference result
+    """
     def __init__(self, topology):
         self.topology = topology
         self.body_labels = {0: 'nose', 1: 'lEye', 2: 'rEye', 3: 'lEar', 4: 'rEar', 5: 'lShoulder', 6: 'rShoulder',
@@ -72,7 +76,6 @@ class GetKeypoints(object):
         count = int(object_counts[0])
         if count > 1:
             count = 1
-        K = topology.shape[0]
 
         body_dict = {}
         feature_vec = []

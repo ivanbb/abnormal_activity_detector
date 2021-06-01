@@ -38,6 +38,19 @@ activity_predictor = ActivityPredictor(
 
 
 def create_display_meta(objects, count, normalized_peaks, frame_meta, frame_width, frame_height):
+    """
+    Create visualisation for human pose
+    Args:
+        objects:
+        count:
+        normalized_peaks:
+        frame_meta:
+        frame_width:
+        frame_height:
+
+    Returns:
+        body_list
+    """
     bmeta = frame_meta.base_meta.batch_meta
     dmeta = pyds.nvds_acquire_display_meta_from_pool(bmeta)
     pyds.nvds_add_display_meta_to_frame(frame_meta, dmeta)
@@ -69,7 +82,7 @@ def create_display_meta(objects, count, normalized_peaks, frame_meta, frame_widt
                     cparams.bg_color.set(0, 255, 0, 1)
                     dmeta.num_circles = dmeta.num_circles + 1
                 body_dict[BODY_LABELS[j]] = (x, y)
-                
+
         body_list.append(body_dict)
 
         if not DRAW_TRT_POSE_ARTIFACTS:
@@ -220,6 +233,17 @@ def osd_sink_pad_buffer_probe(pad, info, u_data):
 
 
 def decodebin_child_added(child_proxy, Object, name, user_data):
+    """
+    Callback for adding pipeline components
+    Args:
+        child_proxy:
+        Object:
+        name:
+        user_data:
+
+    Returns:
+
+    """
     print("Decodebin child added:", name, "\n")
     if name.find("decodebin") != -1:
         Object.connect("child-added", decodebin_child_added, user_data)
@@ -230,6 +254,16 @@ def decodebin_child_added(child_proxy, Object, name, user_data):
 
 
 def cb_newpad(decodebin, decoder_src_pad, data):
+    """
+    Create src pad
+    Args:
+        decodebin:
+        decoder_src_pad:
+        data:
+
+    Returns:
+        None
+    """
     caps = decoder_src_pad.get_current_caps()
     gststruct = caps.get_structure(0)
     gstname = gststruct.get_name()
@@ -402,7 +436,7 @@ def create_pipeline(urls):
     queue4 = Gst.ElementFactory.make("queue", "queue4")
     queue5 = Gst.ElementFactory.make("queue", "queue5")
     queue6 = Gst.ElementFactory.make("queue", "queue6")
-    queue7 = Gst.ElementFactory.make("queue","queue7")
+    queue7 = Gst.ElementFactory.make("queue", "queue7")
 
     pgie = create_pipeline_element("nvinfer", "primary-inference")
     tracker = create_pipeline_element("nvtracker", "tracker")

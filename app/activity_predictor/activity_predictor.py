@@ -6,6 +6,9 @@ from activity_predictor.person_tracker import PersonTracker
 
 
 class ActivityPredictor:
+    """
+    Human behaviour classifier
+    """
     def __init__(
             self,
             model_path='models/lstm_model.h5',
@@ -26,11 +29,29 @@ class ActivityPredictor:
         print("Activity predictor initialised successfully")
 
     def add_untracked_pose_dict(self, component_id, pose_dict):
+        """
+        Add rect params data for found object to store property
+        for link them with object from tracker later
+        Args:
+            component_id: unique detected object's component id
+            pose_dict:
+
+        Returns:
+            None
+        """
         if component_id not in self.__untracked_objects:
             self.__untracked_objects[component_id] = pose_dict
             print("rect params added: {0}".format(component_id))
 
     def __remove_not_relevant_trackers(self, objects_meta):
+        """
+        Remove PersonTracker objects linked with Detected objects removed from frame
+        Args:
+            objects_meta:
+
+        Returns:
+            None
+        """
         relevant_ids = [obj_meta.object_id for obj_meta in objects_meta]
         trackers_id_to_delete = []
 
@@ -43,6 +64,14 @@ class ActivityPredictor:
             del self.__tracked_objects[obj_id]
 
     def update_person_trackers(self, objects_meta):
+        """
+        Manage person trackers
+        Args:
+            objects_meta:
+
+        Returns:
+
+        """
         for obj_meta in objects_meta:
             for trk in self.__tracked_objects:
                 print("tracker id: {0} obj id: {1}".format(trk, obj_meta.object_id))
@@ -68,6 +97,11 @@ class ActivityPredictor:
         self.__remove_not_relevant_trackers(objects_meta)
 
     def predict_activity(self):
+        """
+        Inference human behaviour classifier
+        Returns:
+            None
+        """
         for tracker_id in self.__tracked_objects:
             tracker = self.__tracked_objects[tracker_id]
             if len(tracker.states) >= self.__window:
@@ -76,11 +110,9 @@ class ActivityPredictor:
                 sample = sample.reshape(1, self.__window, self.__pose_vec_dim)
                 prediction_vector = self.__secondary_model.predict(sample)[0]
                 predicted_class = int(np.argmax(prediction_vector))
-                print("predict: {0}".format(prediction_vector))
 
                 predicted_activity = self.__motion_dict[predicted_class] \
                     if prediction_vector[predicted_class] >= self.__prediction_threshold \
                     else None
                 tracker.activity = predicted_activity
                 tracker.annotate()
-                print(predicted_activity)
